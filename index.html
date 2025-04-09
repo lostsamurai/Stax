@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Building Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 300px;
+            height: 500px;
+            background-color: #87CEEB;
+            overflow: hidden;
+        }
+        
+        .block {
+            position: absolute;
+            background-color: #4CAF50;
+            border: 2px solid #388E3C;
+            transition: transform 0.1s;
+        }
+        
+        #base {
+            position: absolute;
+            bottom: 0;
+            width: 200px;
+            height: 30px;
+            background-color: #795548;
+            left: 50px;
+        }
+        
+        #score-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        
+        #restart-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        #restart-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="base"></div>
+        <div id="score-display">Height: 0</div>
+        <div id="game-over">
+            <h2>Game Over!</h2>
+            <p id="final-score">Your tower height: 0</p>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        
+        // Game variables
+        let currentBlock = null;
+        let fallingBlock = null;
+        let towerHeight = 0;
+        let isGameOver = false;
+        let blockWidth = 150;
+        let blockHeight = 50;
+        let speed = 2;
+        let movingRight = true;
+        let perfectStackCount = 0;
+        
+        // Initialize the game
+        function initGame() {
+            // Reset game state
+            isGameOver = false;
+            towerHeight = 0;
+            perfectStackCount = 0;
+            speed = 2;
+            
+            // Clear all blocks except the base
+            const blocks = document.querySelectorAll('.block');
+            blocks.forEach(block => block.remove());
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+            
+            // Create the first block
+            createNewBlock();
+            
+            // Update score display
+            updateScore();
+        }
+        
+        // Create a new block at the top of the tower
+        function createNewBlock() {
+            currentBlock = document.createElement('div');
+            currentBlock.className = 'block';
+            currentBlock.style.width = blockWidth + 'px';
+            currentBlock.style.height = blockHeight + 'px';
+            
+            // Position the block at the top of the tower
+            const topPosition = gameContainer.offsetHeight - (towerHeight * blockHeight) - blockHeight;
+            currentBlock.style.top = topPosition + 'px';
+            
+            // Start position (left or right)
+            currentBlock.style.left = '0px';
+            
+            gameContainer.appendChild(currentBlock);
+            
+            // Start moving the block
+            moveBlock();
+        }
+        
+        // Move the current block left and right
+        function moveBlock() {
+            if (isGameOver) return;
+            
+            const currentLeft = parseInt(currentBlock.style.left);
+            const containerWidth = gameContainer.offsetWidth;
+            
+            // Change direction if hitting edges
+            if (currentLeft + blockWidth > containerWidth) {
+                movingRight = false;
+            } else if (currentLeft < 0) {
+                movingRight = true;
+            }
+            
+            // Move the block
+            const newLeft = movingRight ? currentLeft + speed : currentLeft - speed;
+            currentBlock.style.left = newLeft + 'px';
+            
+            requestAnimationFrame(moveBlock);
+        }
+        
+        // Place the current block on the tower
+        function placeBlock() {
+            if (isGameOver) return;
+            
+            // Stop the current block from moving
+            cancelAnimationFrame(moveBlock);
+            
+            // Check if this is the first block (placed on the base)
+            const previousBlock = document.querySelector('.block:not(:last-child)');
+            
+            if (previousBlock) {
+                const prevLeft = parseInt(previousBlock.style.left);
+                const currentLeft = parseInt(currentBlock.style.left);
+                
+                // Calculate overlap
+                const overlap = Math.min(prevLeft + blockWidth, currentLeft + blockWidth) - Math.max(prevLeft, currentLeft);
+                
+                // If no overlap, game over
+                if (overlap <= 0) {
+                    gameOver();
+                    return;
+                }
+                
+                // Perfect stack (small tolerance)
+                if (Math.abs(prevLeft - currentLeft) < 5) {
+                    perfectStackCount++;
+                    if (perfectStackCount % 3 === 0) {
+                        speed += 0.5; // Increase speed every 3 perfect stacks
+                    }
+                } else {
+                    perfectStackCount = 0;
+                }
+                
+                // Cut the block to match the overlap
+                blockWidth = overlap;
+                currentBlock.style.width = blockWidth + 'px';
+                
+                // Position the block to match the overlap
+                currentBlock.style.left = Math.max(prevLeft, currentLeft) + 'px';
+            }
+            
+            // The block is now part of the tower
+            fallingBlock = currentBlock;
+            towerHeight++;
+            updateScore();
+            
+            // Make the block fall slightly for effect
+            animateBlockFall();
+            
+            // Create a new block after a short delay
+            setTimeout(createNewBlock, 300);
+        }
+        
+        // Animate the block falling into place
+        function animateBlockFall() {
+            const currentTop = parseInt(fallingBlock.style.top);
+            const targetTop = gameContainer.offsetHeight - (towerHeight * blockHeight) - blockHeight;
+            
+            if (currentTop < targetTop) {
+                fallingBlock.style.top = (currentTop + 5) + 'px';
+                requestAnimationFrame(animateBlockFall);
+            }
+        }
+        
+        // Update the score display
+        function updateScore() {
+            scoreDisplay.textContent = `Height: ${towerHeight}`;
+        }
+        
+        // Game over
+        function gameOver() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = `Your tower height: ${towerHeight}`;
+            gameOverScreen.style.display = 'block';
+        }
+        
+        // Event listeners
+        gameContainer.addEventListener('click', placeBlock);
+        restartBtn.addEventListener('click', initGame);
+        
+        // Start the game
+        initGame();
+    </script>
+</body>
+</html>
